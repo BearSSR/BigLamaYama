@@ -1,80 +1,59 @@
 from flask import Flask, jsonify
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+import requests
 
 app = Flask(__name__)
 
-def fetch_conditions_with_prices():
-    transport = RequestsHTTPTransport(
-        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/81Dm16JjuFSrqz813HysXoUPvzTwE7fsfPk2RTf66nyC",
-        verify=True,
-        retries=3
-    )
+def fetch_market_data():
+    try:
+        response = requests.get("https://gamma-api.polymarket.com/markets")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        return {"error": f"Error fetching market data: {e}"}
 
-    client = Client(transport=transport, fetch_schema_from_transport=False)
-
-    query = gql("""
-    {
-      conditions(first: 20) {
-        id
-        oracle
-        questionId
-        outcomeSlotCount
-        outcomeSlot {
-          indexSet
-          payouts
-        }
-        fixedProductMarketMakers {
-          id
-          outcomeTokenAmounts
-          outcomeTokenPrices
-        }
-      }
-    }
-    """)
-
-    result = client.execute(query)
-    return result['conditions']
-
-def detect_arbitrage(conditions):
+def detect_arbitrage(markets):
     opportunities = []
-    for cond in conditions:
-        markets = cond.get('fixedProductMarketMakers', [])
-        for market in markets:
-            prices = market.get('outcomeTokenPrices', [])
-            if len(prices) == 2:
-                yes = float(prices[0])
-                no = float(prices[1])
-                total = yes + no
-
-                if total < 0.99:  # Adjust threshold as needed
-                    opportunities.append({
-                        "marketId": market['id'],
-                        "conditionId": cond['id'],
-                        "questionId": cond['questionId'],
-                        "yes": yes,
-                        "no": no,
-                        "total": round(total, 4),
-                        "recommendation": f"Bet YES: {round(yes * 100)}% / NO: {round(no * 100)}%"
-                    })
+    for market in markets:
+        outcomes = market.get("outcomes", [])
+        prices = market.get("outcomePrices", [])
+        if len(outcomes) == 2 and len(prices) == 2:
+            try:
+                price_yes = float(prices[0])
+                price_no = float(prices[1])
+                total = price_yes + price_no
+                if total < 1.0:
+                    opportunity = {
+                        "question": market.get("question", "N/A"),
+                        "marketId": market.get("id", "N/A"),
+                        "conditionId": market.get("conditionId", "N/A"),
+                        "outcomes": outcomes,
+                        "yes_price": price_yes,
+                        "no_price": price_no,
+                        "total": total,
+                        "arbitrage_margin": round((1.0 - total) * 100, 2),
+                        "recommendation": f"Split stake: YES {round((1 - price_no / total) * 100)}%, NO {round((1 - price_yes / total) * 100)}%"
+                    }
+                    opportunities.append(opportunity)
+            except (ValueError, TypeError):
+                continue
     return opportunities
 
 @app.route('/')
-def index():
+def root():
     return jsonify({
-        "message": "Polymarket Arbitrage API ✅",
-        "endpoint": "/arbs"
+        "endpoint": "/arbs",
+        "message": "Polymarket Arbitrage API - Powered by Gamma ✅"
     })
 
 @app.route('/arbs')
-def arbs():
-    try:
-        data = fetch_conditions_with_prices()
-        arbs = detect_arbitrage(data)
-        return jsonify(arbs)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def get_arbs():
+    data = fetch_market_data()
+    if isinstance(data, dict) and "error" in data:
+        return jsonify(data), 500
+    arbs = detect_arbitrage(data)
+    return jsonify(arbs)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+
 

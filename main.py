@@ -4,83 +4,77 @@ from gql.transport.requests import RequestsHTTPTransport
 
 app = Flask(__name__)
 
-# Setup the GraphQL client
-transport = RequestsHTTPTransport(
-    url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/81Dm16JjuFSrqz813HysXoUPvzTwE7fsfPk2RTf66nyC",
-    verify=True,
-    retries=3,
-)
-client = Client(transport=transport, fetch_schema_from_transport=False)
+def fetch_conditions_with_prices():
+    transport = RequestsHTTPTransport(
+        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/81Dm16JjuFSrqz813HysXoUPvzTwE7fsfPk2RTf66nyC",
+        verify=True,
+        retries=3
+    )
 
-# Query outcome token prices and metadata
-def fetch_polymarket_prices():
+    client = Client(transport=transport, fetch_schema_from_transport=False)
+
     query = gql("""
     {
-      outcomeTokenPrices(first: 30, orderBy: price, orderDirection: desc) {
+      conditions(first: 20) {
         id
-        price
-        outcomeSlot
-        condition {
+        oracle
+        questionId
+        outcomeSlotCount
+        outcomeSlot {
+          indexSet
+          payouts
+        }
+        fixedProductMarketMakers {
           id
-          questionId
+          outcomeTokenAmounts
+          outcomeTokenPrices
         }
       }
     }
     """)
+
     result = client.execute(query)
-    return result["outcomeTokenPrices"]
+    return result['conditions']
 
-# Detect arbitrage by grouping YES/NO prices by condition
-def detect_arbitrage(tokens):
-    condition_map = {}
+def detect_arbitrage(conditions):
+    opportunities = []
+    for cond in conditions:
+        markets = cond.get('fixedProductMarketMakers', [])
+        for market in markets:
+            prices = market.get('outcomeTokenPrices', [])
+            if len(prices) == 2:
+                yes = float(prices[0])
+                no = float(prices[1])
+                total = yes + no
 
-    for token in tokens:
-        condition_id = token["condition"]["id"]
-        if condition_id not in condition_map:
-            condition_map[condition_id] = {
-                "questionId": token["condition"]["questionId"],
-                "outcomes": {}
-            }
-
-        slot = int(token["outcomeSlot"])
-        price = float(token["price"])
-        condition_map[condition_id]["outcomes"][slot] = price
-
-    arbs = []
-    for condition_id, data in condition_map.items():
-        outcomes = data["outcomes"]
-        if 0 in outcomes and 1 in outcomes:
-            yes = outcomes[0]
-            no = outcomes[1]
-            total = yes + no
-            if total < 0.995:
-                arbs.append({
-                    "conditionId": condition_id,
-                    "questionId": data["questionId"],
-                    "yes": yes,
-                    "no": no,
-                    "total": round(total, 4),
-                    "profit_margin": round((1 - total) * 100, 2),
-                    "suggestion": f"YES {round((no / total) * 100)}%, NO {round((yes / total) * 100)}%"
-                })
-
-    return arbs
+                if total < 0.99:  # Adjust threshold as needed
+                    opportunities.append({
+                        "marketId": market['id'],
+                        "conditionId": cond['id'],
+                        "questionId": cond['questionId'],
+                        "yes": yes,
+                        "no": no,
+                        "total": round(total, 4),
+                        "recommendation": f"Bet YES: {round(yes * 100)}% / NO: {round(no * 100)}%"
+                    })
+    return opportunities
 
 @app.route('/')
-def root():
+def index():
     return jsonify({
-        "endpoint": "/arbs",
-        "message": "Polymarket Arbitrage API - Now operational ✅"
+        "message": "Polymarket Arbitrage API ✅",
+        "endpoint": "/arbs"
     })
 
 @app.route('/arbs')
-def get_arbs():
+def arbs():
     try:
-        tokens = fetch_polymarket_prices()
-        arbs = detect_arbitrage(tokens)
+        data = fetch_conditions_with_prices()
+        arbs = detect_arbitrage(data)
         return jsonify(arbs)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+

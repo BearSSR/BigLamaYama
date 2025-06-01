@@ -12,7 +12,7 @@ def fetch_polymarket_data():
     )
     client = Client(transport=transport, fetch_schema_from_transport=False)
 
-    query = gql(\"\"\"
+    query = gql("""
     {
       markets(first: 20, orderBy: volumeUSD, orderDirection: desc) {
         id
@@ -23,7 +23,7 @@ def fetch_polymarket_data():
         }
       }
     }
-    \"\"\")
+    """)
 
     result = client.execute(query)
     return result['markets']
@@ -56,9 +56,13 @@ def root():
 
 @app.route('/arbs')
 def get_arbs():
-    markets = fetch_polymarket_data()
-    arbs = detect_arbitrage(markets)
-    return jsonify(arbs)
+    try:
+        markets = fetch_polymarket_data()
+        arbs = detect_arbitrage(markets)
+        return jsonify(arbs)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+

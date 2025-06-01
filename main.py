@@ -14,9 +14,9 @@ def fetch_polymarket_data():
 
     query = gql("""
     {
-      markets(first: 20, orderBy: volumeUSD, orderDirection: desc) {
+      conditionMarkets(first: 20, orderBy: volumeUSD, orderDirection: desc) {
         id
-        question
+        title
         outcomes {
           name
           price
@@ -26,7 +26,7 @@ def fetch_polymarket_data():
     """)
 
     result = client.execute(query)
-    return result['markets']
+    return result["conditionMarkets"]
 
 def detect_arbitrage(markets):
     opportunities = []
@@ -38,7 +38,7 @@ def detect_arbitrage(markets):
 
             if combined < 0.995:
                 arb = {
-                    "market": market['question'],
+                    "market": market['title'],
                     "yes": yes,
                     "no": no,
                     "combined": round(combined, 4),
@@ -65,4 +65,5 @@ def get_arbs():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+
 

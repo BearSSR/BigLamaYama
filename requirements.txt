@@ -2,3 +2,8 @@ Flask
 gql
 requests
 gunicorn
+requests_toolbelt
+graphql-core
+backoff
+yarl
+aiohttp

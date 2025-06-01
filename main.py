@@ -6,13 +6,16 @@ app = Flask(__name__)
 
 def fetch_polymarket_data():
     transport = RequestsHTTPTransport(
-        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/7cQFtTrMwn4rRxzRfda2GUqJh4pLf7qFvt5F91VA3kEZ",
+        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/Bx1W4S7kDVxs9gC3s2G6DS8kdNBJNVhMviCtin2DiBp",
         verify=True,
         retries=3,
-        headers={"Content-Type": "application/json"},
-        fetch_schema_from_transport=False  # Required to avoid schema introspection error
+        headers={"Content-Type": "application/json"}
     )
-    client = Client(transport=transport)
+
+    client = Client(
+        transport=transport,
+        fetch_schema_from_transport=False
+    )
 
     query = gql("""
     {
@@ -34,22 +37,19 @@ def detect_arbitrage(markets):
     opportunities = []
     for market in markets:
         if len(market['outcomes']) == 2:
-            try:
-                yes = float(market['outcomes'][0]['price'])
-                no = float(market['outcomes'][1]['price'])
-                combined = yes + no
+            yes = float(market['outcomes'][0]['price'])
+            no = float(market['outcomes'][1]['price'])
+            combined = yes + no
 
-                if combined < 0.995:
-                    arb = {
-                        "market": market['question'],
-                        "yes": yes,
-                        "no": no,
-                        "combined": round(combined, 4),
-                        "recommendation": f"Bet proportionally on YES/NO to lock profit (YES {round(yes * 100)}%, NO {round(no * 100)}%)"
-                    }
-                    opportunities.append(arb)
-            except Exception as e:
-                print(f"Error parsing market: {market['id']} - {e}")
+            if combined < 0.995:
+                arb = {
+                    "market": market['question'],
+                    "yes": yes,
+                    "no": no,
+                    "combined": round(combined, 4),
+                    "recommendation": f"Bet proportionally on YES/NO to lock profit (YES {round(yes * 100)}%, NO {round(no * 100)}%)"
+                }
+                opportunities.append(arb)
     return opportunities
 
 @app.route('/')

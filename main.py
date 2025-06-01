@@ -6,16 +6,15 @@ app = Flask(__name__)
 
 def fetch_polymarket_data():
     transport = RequestsHTTPTransport(
-        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/Bx1W4S7kDVxs9gC3s2G6DS8kdNBJNVhMviCtin2DiBp",
+        url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/81Dm16JjuFSrqz813HysXoUPvzTwE7fsfPk2RTf66nyC",
         verify=True,
-        retries=3,
-        headers={"Content-Type": "application/json"}
+        retries=3
     )
     client = Client(transport=transport, fetch_schema_from_transport=False)
 
     query = gql("""
     {
-      fixedProductMarkets(first: 20, orderBy: volume, orderDirection: desc) {
+      markets(first: 20, orderBy: volume, orderDirection: desc) {
         id
         question
         outcomes {
@@ -27,7 +26,7 @@ def fetch_polymarket_data():
     """)
 
     result = client.execute(query)
-    return result['fixedProductMarkets']
+    return result['markets']
 
 def detect_arbitrage(markets):
     opportunities = []
@@ -62,8 +61,9 @@ def get_arbs():
         arbs = detect_arbitrage(markets)
         return jsonify(arbs)
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+
 

@@ -8,15 +8,15 @@ def fetch_polymarket_data():
     transport = RequestsHTTPTransport(
         url="https://gateway.thegraph.com/api/be264eb9877d02a1d003ae8d2c650741/subgraphs/id/81Dm16JjuFSrqz813HysXoUPvzTwE7fsfPk2RTf66nyC",
         verify=True,
-        retries=3
+        retries=3,
     )
     client = Client(transport=transport, fetch_schema_from_transport=False)
 
     query = gql("""
     {
-      markets(first: 20, orderBy: volume, orderDirection: desc) {
+      conditionMarkets(first: 20, orderBy: volumeUSD, orderDirection: desc) {
         id
-        question
+        title
         outcomes {
           name
           price
@@ -26,7 +26,7 @@ def fetch_polymarket_data():
     """)
 
     result = client.execute(query)
-    return result['markets']
+    return result['conditionMarkets']
 
 def detect_arbitrage(markets):
     opportunities = []
@@ -38,7 +38,7 @@ def detect_arbitrage(markets):
 
             if combined < 0.995:
                 arb = {
-                    "market": market['question'],
+                    "market": market['title'],
                     "yes": yes,
                     "no": no,
                     "combined": round(combined, 4),
@@ -56,14 +56,9 @@ def root():
 
 @app.route('/arbs')
 def get_arbs():
-    try:
-        markets = fetch_polymarket_data()
-        arbs = detect_arbitrage(markets)
-        return jsonify(arbs)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    markets = fetch_polymarket_data()
+    arbs = detect_arbitrage(markets)
+    return jsonify(arbs)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
-
-

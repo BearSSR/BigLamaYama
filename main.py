@@ -11,15 +11,11 @@ def fetch_polymarket_data():
         retries=3,
         headers={"Content-Type": "application/json"}
     )
-
-    client = Client(
-        transport=transport,
-        fetch_schema_from_transport=False
-    )
+    client = Client(transport=transport, fetch_schema_from_transport=False)
 
     query = gql("""
     {
-      markets(first: 20, orderBy: volume, orderDirection: desc) {
+      fixedProductMarkets(first: 20, orderBy: volume, orderDirection: desc) {
         id
         question
         outcomes {
@@ -31,7 +27,7 @@ def fetch_polymarket_data():
     """)
 
     result = client.execute(query)
-    return result['markets']
+    return result['fixedProductMarkets']
 
 def detect_arbitrage(markets):
     opportunities = []
@@ -66,7 +62,8 @@ def get_arbs():
         arbs = detect_arbitrage(markets)
         return jsonify(arbs)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+
